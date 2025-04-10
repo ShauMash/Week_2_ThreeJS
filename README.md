@@ -10,7 +10,9 @@ This project demonstrates how to render a **cinematic video playback plane** in 
   - `Spacebar`: Toggle play/pause
   - `ArrowRight`: Forward video by 5 seconds
   - `ArrowLeft`: Rewind video by 5 seconds
+- Plane can also be rotated using alt+click and moved using left click and scaled using the mouse scroller.
 - 🔊 Video plays with **audio** and preserves original resolution
+- All the changes made to the plane are detected and logged into the console 
 - 🎬 Cinematic plane dimensions (not full screen, gives movie-theater feel)
 
 ---
