@@ -1,228 +1,207 @@
 // Import Three.js
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
 
-let scene, camera, renderer;
-let raycaster, mouse;
-let video, videoTexture, videoMesh;
-let controls;
-let icons = {};
-let isDragging = false;
-let dragStart = new THREE.Vector2();
+// Setup scene
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x303030); // Dark grey background
 
-init();
-animate();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0, 5); // Initial camera position
 
-function init() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x888888);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.z = 5;
+// Video
+const video = document.createElement('video');
+video.src = 'Sample Videos/sample4.mp4';
+video.crossOrigin = 'anonymous';
+video.loop = true;
+video.playsInline = true;
+video.muted = false;
+video.load();
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+const texture = new THREE.VideoTexture(video);
+const geometry = new THREE.PlaneGeometry(6.4, 3.6);
+const material = new THREE.MeshBasicMaterial({ map: texture });
+const videoPlane = new THREE.Mesh(geometry, material);
+scene.add(videoPlane);
 
-  raycaster = new THREE.Raycaster();
-  mouse = new THREE.Vector2();
+// Controls
+const keys = {};
+document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
-  video = document.createElement('video');
-  video.src = 'Sample Videos/sample4.mp4';
-  video.crossOrigin = 'anonymous';
-  video.playsInline = true;
-  video.loop = true;
-  video.muted = false;
-  video.preload = 'auto';
-  video.load();
+// Mouse interaction for icons visibility
+let isMouseOverPlane = false;
 
-  video.addEventListener('loadeddata', () => {
-    videoTexture = new THREE.VideoTexture(video);
-    videoTexture.minFilter = THREE.LinearFilter;
-    videoTexture.magFilter = THREE.LinearFilter;
-    videoTexture.format = THREE.RGBAFormat;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 
-    const geometry = new THREE.PlaneGeometry(10, 6);
-    const material = new THREE.MeshBasicMaterial({ map: videoTexture, side: THREE.DoubleSide });
-    videoMesh = new THREE.Mesh(geometry, material);
-    videoMesh.name = 'videoPlane';
-    scene.add(videoMesh);
-
-    createIcons();
-  });
-
-  window.addEventListener('click', onClick, false);
-  window.addEventListener('resize', onWindowResize);
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('mousedown', onMouseDown);
-  window.addEventListener('mouseup', () => isDragging = false);
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('wheel', onMouseWheel);
-}
-
-function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function onClick(event) {
+window.addEventListener('mousemove', (event) => {
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(scene.children);
+  const intersects = raycaster.intersectObject(videoPlane);
+  isMouseOverPlane = intersects.length > 0;
+});
 
-  for (let i = 0; i < intersects.length; i++) {
-    if (intersects[i].object.name === 'videoPlane') {
-      togglePlayPause();
-      console.log('Video plane clicked');
+window.addEventListener('click', (event) => {
+  if (isMouseOverPlane) {
+    const intersects = raycaster.intersectObjects(iconsGroup.children, true);
+    if (intersects.length > 0) {
+      const name = intersects[0].object.parent.name || intersects[0].object.name;
+      if (name === 'pause') {
+        video.pause();
+        pauseIcon.visible = false;
+        playIcon.visible = true;
+      } else if (name === 'play') {
+        video.play();
+        playIcon.visible = false;
+        pauseIcon.visible = true;
+      } else if (name === 'rewind') {
+        video.currentTime = Math.max(0, video.currentTime - 5);
+      } else if (name === 'forward') {
+        video.currentTime = Math.min(video.duration, video.currentTime + 5);
+      }
     }
   }
-}
+});
 
-function onKeyDown(event) {
-  if (event.code === 'Space') {
-    togglePlayPause();
-  } else if (event.code === 'ArrowLeft') {
-    video.currentTime = Math.max(0, video.currentTime - 5);
-    console.log('Rewind 5 seconds');
-    showIcon('rewind');
-  } else if (event.code === 'ArrowRight') {
-    video.currentTime = Math.min(video.duration, video.currentTime + 5);
-    console.log('Forward 5 seconds');
-    showIcon('forward');
-  }
-}
+// Create icons functions
+const createIcon = (geometry, color) => {
+  const mat = new THREE.MeshBasicMaterial({ color });
+  return new THREE.Mesh(geometry, mat);
+};
 
-function onKeyUp(event) {
-  // No longer using Alt for rotation
-}
+const createPauseIcon = () => {
+  const bar1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.01), new THREE.MeshBasicMaterial({ color: 'grey' }));
+  const bar2 = bar1.clone();
+  bar1.position.x = -0.15;
+  bar2.position.x = 0.15;
+  const group = new THREE.Group();
+  group.add(bar1, bar2);
+  return group;
+};
 
-function onMouseDown(event) {
-  isDragging = true;
-  dragStart.set(event.clientX, event.clientY);
-}
-
-function onMouseMove(event) {
-  if (!isDragging || !camera) return;
-  const deltaX = (event.clientX - dragStart.x) / window.innerWidth;
-  const deltaY = (event.clientY - dragStart.y) / window.innerHeight;
-
-  camera.rotation.y -= deltaX * Math.PI;
-  camera.rotation.x -= deltaY * Math.PI;
-
-  dragStart.set(event.clientX, event.clientY);
-}
-
-function onMouseWheel(event) {
-  if (!camera) return;
-  const direction = event.deltaY > 0 ? 1 : -1;
-  camera.position.z += direction;
-}
-
-function togglePlayPause() {
-  if (video.paused) {
-    video.play();
-    console.log('Play');
-    showIcon('play');
-  } else {
-    video.pause();
-    console.log('Pause');
-    showIcon('pause');
-  }
-}
-
-function showIcon(name) {
-  if (!icons[name]) return;
-  icons[name].material.opacity = 0.7;
-  setTimeout(() => {
-    if (icons[name]) icons[name].material.opacity = 0;
-  }, 500);
-}
-
-function createIcons() {
-  const iconColor = 0x333333;
-  const iconData = [
-    { name: 'play', shapes: createPlayIconShape(), color: iconColor, x: 0 },
-    { name: 'pause', shapes: createPauseIconShape(), color: iconColor, x: 0 },
-    { name: 'rewind', shapes: createRewindIconShape(), color: iconColor, x: -3 },
-    { name: 'forward', shapes: createForwardIconShape(), color: iconColor, x: 3 }
-  ];
-
-  iconData.forEach(({ name, shapes, color, x }) => {
-    const geometry = new THREE.ShapeGeometry(shapes);
-    const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0 });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, 0, 0.1);
-    icons[name] = mesh;
-    videoMesh.add(mesh);
-  });
-}
-
-function createPlayIconShape() {
+const createPlayIcon = () => {
   const shape = new THREE.Shape();
-  shape.moveTo(-0.2, -0.3);
-  shape.lineTo(0.4, 0);
-  shape.lineTo(-0.2, 0.3);
-  shape.lineTo(-0.2, -0.3);
-  return [shape];
-}
+  shape.moveTo(0, 0.3);
+  shape.lineTo(0.5, 0);
+  shape.lineTo(0, -0.3);
+  shape.lineTo(0, 0.3);
+  const geometry = new THREE.ShapeGeometry(shape);
+  return createIcon(geometry, 'grey');
+};
 
-function createPauseIconShape() {
-  const bar1 = new THREE.Shape();
-  bar1.moveTo(-0.25, -0.3);
-  bar1.lineTo(-0.05, -0.3);
-  bar1.lineTo(-0.05, 0.3);
-  bar1.lineTo(-0.25, 0.3);
-  bar1.lineTo(-0.25, -0.3);
+const createDoubleTriangle = (dir = 1) => {
+  const triangle = (xOffset) => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.25);
+    shape.lineTo(0.4 * dir, 0);
+    shape.lineTo(0, -0.25);
+    shape.lineTo(0, 0.25);
+    const geo = new THREE.ShapeGeometry(shape);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 'grey' }));
+    mesh.position.x = xOffset;
+    return mesh;
+  };
+  const group = new THREE.Group();
+  group.add(triangle(-0.25 * dir), triangle(0.1 * dir));
+  return group;
+};
 
-  const bar2 = new THREE.Shape();
-  bar2.moveTo(0.05, -0.3);
-  bar2.lineTo(0.25, -0.3);
-  bar2.lineTo(0.25, 0.3);
-  bar2.lineTo(0.05, 0.3);
-  bar2.lineTo(0.05, -0.3);
+// Icons group
+const iconsGroup = new THREE.Group();
+scene.add(iconsGroup);
 
-  return [bar1, bar2];
-}
+// Playback Icons
+const pauseIcon = createPauseIcon();
+pauseIcon.name = 'pause';
+pauseIcon.position.set(0, 0, 0.01);
+iconsGroup.add(pauseIcon);
 
-function createRewindIconShape() {
-  const triangle1 = new THREE.Shape();
-  triangle1.moveTo(0.1, -0.3);
-  triangle1.lineTo(-0.3, 0);
-  triangle1.lineTo(0.1, 0.3);
-  triangle1.lineTo(0.1, -0.3);
+const playIcon = createPlayIcon();
+playIcon.name = 'play';
+playIcon.position.set(0, 0, 0.01);
+playIcon.visible = false;
+iconsGroup.add(playIcon);
 
-  const triangle2 = new THREE.Shape();
-  triangle2.moveTo(0.5, -0.3);
-  triangle2.lineTo(0.1, 0);
-  triangle2.lineTo(0.5, 0.3);
-  triangle2.lineTo(0.5, -0.3);
+const rewindIcon = createDoubleTriangle(-1);
+rewindIcon.name = 'rewind';
+rewindIcon.position.set(-1.5, 0, 0.01);
+iconsGroup.add(rewindIcon);
 
-  return [triangle1, triangle2];
-}
+const forwardIcon = createDoubleTriangle(1);
+forwardIcon.name = 'forward';
+forwardIcon.position.set(1.5, 0, 0.01);
+iconsGroup.add(forwardIcon);
 
-function createForwardIconShape() {
-  const triangle1 = new THREE.Shape();
-  triangle1.moveTo(-0.1, -0.3);
-  triangle1.lineTo(0.3, 0);
-  triangle1.lineTo(-0.1, 0.3);
-  triangle1.lineTo(-0.1, -0.3);
+videoPlane.add(iconsGroup);
 
-  const triangle2 = new THREE.Shape();
-  triangle2.moveTo(-0.5, -0.3);
-  triangle2.lineTo(-0.1, 0);
-  triangle2.lineTo(-0.5, 0.3);
-  triangle2.lineTo(-0.5, -0.3);
+// Spacebar control
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (video.paused) {
+      video.play();
+      playIcon.visible = false;
+      pauseIcon.visible = true;
+    } else {
+      video.pause();
+      pauseIcon.visible = false;
+      playIcon.visible = true;
+    }
+  }
 
-  return [triangle1, triangle2];
-}
+  // Arrow keys for video control
+  if (e.code === 'ArrowLeft') {
+    video.currentTime = Math.max(0, video.currentTime - 5);
+  } else if (e.code === 'ArrowRight') {
+    video.currentTime = Math.min(video.duration, video.currentTime + 5);
+  }
+});
 
+// Camera movement
+const moveSpeed = 0.1;
+const moveCamera = () => {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+
+  const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
+  const up = new THREE.Vector3(0, 1, 0);
+
+  if (keys['w']) camera.position.addScaledVector(dir, moveSpeed);  // Forward
+  if (keys['s']) camera.position.addScaledVector(dir, -moveSpeed); // Backward
+  if (keys['a']) camera.position.addScaledVector(right, -moveSpeed); // Left
+  if (keys['d']) camera.position.addScaledVector(right, moveSpeed); // Right
+  if (keys['q']) camera.position.addScaledVector(up, -moveSpeed);  // Up
+  if (keys['e']) camera.position.addScaledVector(up, moveSpeed);   // Down
+
+  // Ensure the camera stays within the specified range
+  camera.position.x = Math.max(-9, Math.min(9, camera.position.x));
+  camera.position.y = Math.max(-9, Math.min(9, camera.position.y));
+  camera.position.z = Math.max(-9, Math.min(9, camera.position.z));
+};
+
+// Animate
 function animate() {
   requestAnimationFrame(animate);
-  if (videoMesh && camera) {
-    videoMesh.lookAt(camera.position);
-  }
+
+  moveCamera();
+
+  // Make plane face the camera
+  videoPlane.lookAt(camera.position);
+
+  // Match icons to plane rotation
+  iconsGroup.rotation.copy(videoPlane.rotation);
+
+  // Show or hide icons based on mouse position
+  iconsGroup.visible = isMouseOverPlane;
+
   renderer.render(scene, camera);
 }
+
+video.addEventListener('loadeddata', () => {
+  animate();
+});
