@@ -1,3 +1,4 @@
+// Import Three.js
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 let scene, camera, renderer;
@@ -5,10 +6,8 @@ let raycaster, mouse;
 let video, videoTexture, videoMesh;
 let controls;
 let icons = {};
-let isAltPressed = false;
 let isDragging = false;
 let dragStart = new THREE.Vector2();
-let targetRotation = new THREE.Euler();
 
 init();
 animate();
@@ -72,7 +71,7 @@ function onClick(event) {
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
+  const intersects = raycaster.intersectObjects(scene.children);
 
   for (let i = 0; i < intersects.length; i++) {
     if (intersects[i].object.name === 'videoPlane') {
@@ -83,8 +82,6 @@ function onClick(event) {
 }
 
 function onKeyDown(event) {
-  if (event.code === 'AltLeft') isAltPressed = true;
-
   if (event.code === 'Space') {
     togglePlayPause();
   } else if (event.code === 'ArrowLeft') {
@@ -99,7 +96,7 @@ function onKeyDown(event) {
 }
 
 function onKeyUp(event) {
-  if (event.code === 'AltLeft') isAltPressed = false;
+  // No longer using Alt for rotation
 }
 
 function onMouseDown(event) {
@@ -108,27 +105,20 @@ function onMouseDown(event) {
 }
 
 function onMouseMove(event) {
-  if (!isDragging || !videoMesh) return;
+  if (!isDragging || !camera) return;
   const deltaX = (event.clientX - dragStart.x) / window.innerWidth;
   const deltaY = (event.clientY - dragStart.y) / window.innerHeight;
 
-  if (isAltPressed) {
-    targetRotation.y += deltaX * Math.PI;
-    targetRotation.x += deltaY * Math.PI;
-    console.log(`Rotation -> X: ${targetRotation.x.toFixed(2)}, Y: ${targetRotation.y.toFixed(2)}`);
-  } else {
-    videoMesh.position.x += deltaX * 10;
-    videoMesh.position.y -= deltaY * 10;
-    console.log(`Position -> X: ${videoMesh.position.x.toFixed(2)}, Y: ${videoMesh.position.y.toFixed(2)}`);
-  }
+  camera.rotation.y -= deltaX * Math.PI;
+  camera.rotation.x -= deltaY * Math.PI;
+
   dragStart.set(event.clientX, event.clientY);
 }
 
 function onMouseWheel(event) {
-  if (!videoMesh) return;
-  const scaleFactor = 1 + (event.deltaY > 0 ? -0.1 : 0.1);
-  videoMesh.scale.multiplyScalar(scaleFactor);
-  console.log(`Scale -> X: ${videoMesh.scale.x.toFixed(2)}, Y: ${videoMesh.scale.y.toFixed(2)}, Z: ${videoMesh.scale.z.toFixed(2)}`);
+  if (!camera) return;
+  const direction = event.deltaY > 0 ? 1 : -1;
+  camera.position.z += direction;
 }
 
 function togglePlayPause() {
@@ -145,38 +135,28 @@ function togglePlayPause() {
 
 function showIcon(name) {
   if (!icons[name]) return;
-  icons[name].traverse(child => {
-    if (child.material) child.material.opacity = 0.7;
-  });
+  icons[name].material.opacity = 0.7;
   setTimeout(() => {
-    if (icons[name]) {
-      icons[name].traverse(child => {
-        if (child.material) child.material.opacity = 0;
-      });
-    }
+    if (icons[name]) icons[name].material.opacity = 0;
   }, 500);
 }
 
 function createIcons() {
   const iconColor = 0x333333;
   const iconData = [
-    { name: 'play', shapes: createPlayIconShape(), x: 0 },
-    { name: 'pause', shapes: createPauseIconShape(), x: 0 },
-    { name: 'rewind', shapes: createRewindIconShape(), x: -3 },
-    { name: 'forward', shapes: createForwardIconShape(), x: 3 }
+    { name: 'play', shapes: createPlayIconShape(), color: iconColor, x: 0 },
+    { name: 'pause', shapes: createPauseIconShape(), color: iconColor, x: 0 },
+    { name: 'rewind', shapes: createRewindIconShape(), color: iconColor, x: -3 },
+    { name: 'forward', shapes: createForwardIconShape(), color: iconColor, x: 3 }
   ];
 
-  iconData.forEach(({ name, shapes, x }) => {
-    const group = new THREE.Group();
-    shapes.forEach(shape => {
-      const geometry = new THREE.ShapeGeometry(shape);
-      const material = new THREE.MeshBasicMaterial({ color: iconColor, transparent: true, opacity: 0 });
-      const mesh = new THREE.Mesh(geometry, material);
-      group.add(mesh);
-    });
-    group.position.set(x, 0, 0.1);
-    icons[name] = group;
-    videoMesh.add(group);
+  iconData.forEach(({ name, shapes, color, x }) => {
+    const geometry = new THREE.ShapeGeometry(shapes);
+    const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, 0, 0.1);
+    icons[name] = mesh;
+    videoMesh.add(mesh);
   });
 }
 
@@ -190,57 +170,59 @@ function createPlayIconShape() {
 }
 
 function createPauseIconShape() {
-  const left = new THREE.Shape();
-  left.moveTo(-0.25, -0.3);
-  left.lineTo(-0.05, -0.3);
-  left.lineTo(-0.05, 0.3);
-  left.lineTo(-0.25, 0.3);
-  left.lineTo(-0.25, -0.3);
+  const bar1 = new THREE.Shape();
+  bar1.moveTo(-0.25, -0.3);
+  bar1.lineTo(-0.05, -0.3);
+  bar1.lineTo(-0.05, 0.3);
+  bar1.lineTo(-0.25, 0.3);
+  bar1.lineTo(-0.25, -0.3);
 
-  const right = new THREE.Shape();
-  right.moveTo(0.05, -0.3);
-  right.lineTo(0.25, -0.3);
-  right.lineTo(0.25, 0.3);
-  right.lineTo(0.05, 0.3);
-  right.lineTo(0.05, -0.3);
+  const bar2 = new THREE.Shape();
+  bar2.moveTo(0.05, -0.3);
+  bar2.lineTo(0.25, -0.3);
+  bar2.lineTo(0.25, 0.3);
+  bar2.lineTo(0.05, 0.3);
+  bar2.lineTo(0.05, -0.3);
 
-  return [left, right];
+  return [bar1, bar2];
 }
 
 function createRewindIconShape() {
-  const left = new THREE.Shape();
-  left.moveTo(0.1, -0.3);
-  left.lineTo(-0.3, 0);
-  left.lineTo(0.1, 0.3);
-  left.lineTo(0.1, -0.3);
+  const triangle1 = new THREE.Shape();
+  triangle1.moveTo(0.1, -0.3);
+  triangle1.lineTo(-0.3, 0);
+  triangle1.lineTo(0.1, 0.3);
+  triangle1.lineTo(0.1, -0.3);
 
-  const right = new THREE.Shape();
-  right.moveTo(0.5, -0.3);
-  right.lineTo(0.1, 0);
-  right.lineTo(0.5, 0.3);
-  right.lineTo(0.5, -0.3);
+  const triangle2 = new THREE.Shape();
+  triangle2.moveTo(0.5, -0.3);
+  triangle2.lineTo(0.1, 0);
+  triangle2.lineTo(0.5, 0.3);
+  triangle2.lineTo(0.5, -0.3);
 
-  return [left, right];
+  return [triangle1, triangle2];
 }
 
 function createForwardIconShape() {
-  const right = new THREE.Shape();
-  right.moveTo(-0.1, -0.3);
-  right.lineTo(0.3, 0);
-  right.lineTo(-0.1, 0.3);
-  right.lineTo(-0.1, -0.3);
+  const triangle1 = new THREE.Shape();
+  triangle1.moveTo(-0.1, -0.3);
+  triangle1.lineTo(0.3, 0);
+  triangle1.lineTo(-0.1, 0.3);
+  triangle1.lineTo(-0.1, -0.3);
 
-  const left = new THREE.Shape();
-  left.moveTo(-0.5, -0.3);
-  left.lineTo(-0.1, 0);
-  left.lineTo(-0.5, 0.3);
-  left.lineTo(-0.5, -0.3);
+  const triangle2 = new THREE.Shape();
+  triangle2.moveTo(-0.5, -0.3);
+  triangle2.lineTo(-0.1, 0);
+  triangle2.lineTo(-0.5, 0.3);
+  triangle2.lineTo(-0.5, -0.3);
 
-  return [right, left];
+  return [triangle1, triangle2];
 }
 
 function animate() {
   requestAnimationFrame(animate);
-  if (videoMesh) videoMesh.rotation.copy(targetRotation);
+  if (videoMesh && camera) {
+    videoMesh.lookAt(camera.position);
+  }
   renderer.render(scene, camera);
 }
